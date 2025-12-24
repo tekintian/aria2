@@ -14,7 +14,6 @@ jobs:
     strategy:
       matrix:
         os: [macos-14]
-        # os: [ubuntu-22.04, macos-14]
         compiler: [gcc, clang]
         crypto: [openssl, gnutls]
         bittorrent: [with-bt, without-bt]
@@ -94,6 +93,9 @@ jobs:
         echo 'CFLAGS=-mmacosx-version-min=10.15' >> $GITHUB_ENV
         echo 'CXXFLAGS=-mmacosx-version-min=10.15 -std=c++11' >> $GITHUB_ENV
         echo 'LDFLAGS=-mmacosx-version-min=10.15' >> $GITHUB_ENV
+    
+    - name: Generate configure script
+      run: autoreconf -i
     
     - name: Configure
       run: |
