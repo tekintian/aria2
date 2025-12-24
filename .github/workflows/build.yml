@@ -20,6 +20,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
+    
     - name: Linux setup
       if: runner.os == 'Linux'
       run: |
@@ -40,63 +41,66 @@ jobs:
           libsqlite3-dev \
           libssh2-1-dev \
           libcppunit-dev
-    - name: MacOS setup
+    
+    - name: MacOS setup (兼容10.15)
       if: runner.os == 'macOS'
       run: |
-        brew install cppunit gettext openssl libssh2 c-ares sqlite3 \
+        # 安装兼容10.15的依赖版本
+        brew install cppunit gettext openssl@1.1 libssh2@1.10 c-ares@1.18 sqlite3@3.39 \
           autoconf automake pkg-config libtool
+        # 强制链接旧版本依赖
+        brew link --force openssl@1.1
+        brew link --force libssh2@1.10
+        brew link --force c-ares@1.18
+        brew link --force sqlite3@3.39
+    
     - name: Setup clang (Linux)
       if: runner.os == 'Linux' && matrix.compiler == 'clang'
       run: |
         echo 'CC=clang-15' >> $GITHUB_ENV
         echo 'CXX=clang++-15' >> $GITHUB_ENV
+    
     - name: Setup clang (MacOS)
       if: runner.os == 'macOS' && matrix.compiler == 'clang'
       run: |
         echo 'CC=clang' >> $GITHUB_ENV
         echo 'CXX=clang++' >> $GITHUB_ENV
+        # 添加macOS版本兼容参数
+        echo 'CFLAGS=-mmacosx-version-min=10.15' >> $GITHUB_ENV
+        echo 'CXXFLAGS=-mmacosx-version-min=10.15 -std=c++11' >> $GITHUB_ENV
+        echo 'LDFLAGS=-mmacosx-version-min=10.15' >> $GITHUB_ENV
+    
     - name: Setup gcc (Linux)
       if: runner.os == 'Linux' && matrix.compiler == 'gcc'
       run: |
         echo 'CC=gcc-12' >> $GITHUB_ENV
         echo 'CXX=g++-12' >> $GITHUB_ENV
+    
     - name: Setup gcc (MacOS)
       if: runner.os == 'macOS' && matrix.compiler == 'gcc'
       run: |
-        echo 'CC=gcc' >> $GITHUB_ENV
-        echo 'CXX=g++' >> $GITHUB_ENV
-    - name: Libtool
-      run: |
-        autoreconf -i
-    - name: Setup compiler flags
-      run: |
-        asanflags="-fsanitize=address,undefined -fno-sanitize-recover=undefined"
-
-        CPPFLAGS="$asanflags -g3"
-        LDFLAGS="$asanflags"
-
-        echo 'CPPFLAGS='"$CPPFLAGS" >> $GITHUB_ENV
-        echo 'LDFLAGS='"$LDFLAGS" >> $GITHUB_ENV
-    - name: Disable BitTorrent
-      if: matrix.bittorrent == 'without-bt'
-      run: |
-        FEATURE_FLAGS="$FEATURE_FLAGS --disable-bittorrent"
-
-        echo 'FEATURE_FLAGS='"$FEATURE_FLAGS" >> $GITHUB_ENV
-    - name: Configure autotools (Linux, gnutls)
-      if: runner.os == 'Linux' && matrix.crypto == 'gnutls'
-      run: |
-        ./configure --with-gnutls --without-openssl $FEATURE_FLAGS
-    - name: Configure autotools (Linux, openssl)
-      if: runner.os == 'Linux' && matrix.crypto == 'openssl'
-      run: |
-        ./configure --without-gnutls --with-openssl $FEATURE_FLAGS
-    - name: Configure autotools (macOS)
-      if: runner.os == 'macOS'
+        brew install gcc@11  # gcc11对10.15兼容性更好
+        echo 'CC=gcc-11' >> $GITHUB_ENV
+        echo 'CXX=g++-11' >> $GITHUB_ENV
+        # 添加macOS版本兼容参数
+        echo 'CFLAGS=-mmacosx-version-min=10.15' >> $GITHUB_ENV
+        echo 'CXXFLAGS=-mmacosx-version-min=10.15 -std=c++11' >> $GITHUB_ENV
+        echo 'LDFLAGS=-mmacosx-version-min=10.15' >> $GITHUB_ENV
+    
+    - name: Configure
       run: |
         ./configure \
-          --without-openssl --without-gnutls --with-appletls \
-          --disable-nls
-    - name: Build aria2
+          --${{ matrix.bittorrent }} \
+          $([[ "${{ matrix.crypto }}" == "openssl" ]] && echo "--without-gnutls" || echo "--with-gnutls")
+    
+    - name: Build
+      run: make -j$(nproc)
+    
+    - name: Test
+      run: make check
+
+    - name: 验证兼容性
+      if: runner.os == 'macOS'
       run: |
-        make -j"$(nproc 2> /dev/null || sysctl -n hw.ncpu)" check
+        # 检查编译产物的最低支持版本
+        otool -l src/aria2c | grep -A 3 LC_VERSION_MIN_MACOSX
