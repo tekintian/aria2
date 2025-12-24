@@ -53,11 +53,11 @@ jobs:
       if: runner.os == 'macOS'
       run: |
         # 安装兼容10.15的依赖版本
-        brew install cppunit gettext openssl@1.1 libssh2@1.10 c-ares@1.18 sqlite3@3.39 \
+        brew install cppunit gettext openssl@1.1 libssh2 c-ares@1.18 sqlite3@3.39 \
           autoconf automake pkg-config libtool
         # 强制链接旧版本依赖
         brew link --force openssl@1.1
-        brew link --force libssh2@1.10
+        # brew link --force libssh2@1.10
         brew link --force c-ares@1.18
         brew link --force sqlite3@3.39
     
